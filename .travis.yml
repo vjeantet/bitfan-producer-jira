@@ -1,0 +1,17 @@
+# .travis.yml
+language: go
+go:
+  - "1.10"
+
+install:
+    - go get -v github.com/vjeantet/bitfan/commons/xprocessor
+    - go get -v gopkg.in/andygrunwald/go-jira.v1
+  
+# calls goreleaser
+deploy:
+- provider: script
+  skip_cleanup: true
+  script: curl -sL http://git.io/goreleaser | bash
+  on:
+    tags: true
+    condition: $TRAVIS_OS_NAME = linux

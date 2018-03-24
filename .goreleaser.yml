@@ -1,0 +1,18 @@
+# .goreleaser.yml
+# test local : goreleaser --snapshot --skip-publish --rm-dist
+# Build customization
+builds:
+  - binary: producer-jira
+    goos:
+      - windows
+      - darwin
+    goarch:
+      - amd64
+# Archive customization
+archive:
+  format: tar.gz
+  format_overrides:
+    - goos: windows
+      format: zip
+  replacements:
+    darwin: macOS
