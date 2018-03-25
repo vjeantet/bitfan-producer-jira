@@ -2,33 +2,42 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 
+	"github.com/clbanning/mxj"
 	xp "github.com/vjeantet/bitfan/commons/xprocessor"
-	jira "gopkg.in/andygrunwald/go-jira.v1"
 )
 
 var envs map[string]string
 var r *xp.Runner
 
-var url, username, password, jql string
-
 func main() {
-	r = xp.New(
-		Configure, Start, Receive, Stop,
-	)
-	r.OptionString("url", true, "", "")
-	r.OptionString("username", true, "", "")
-	r.OptionString("password", true, "", "")
-	r.OptionString("jql", true, "", "")
+	r = xp.New(Configure, Start, Receive, Stop)
+	r.Description = "Produce or enrich events from issues found in JIRA"
+	r.ShortDescription = ""
+
+	r.OptionString("url", true, "http(s) jira rest endpoint", "")
+	r.OptionString("username", true, "username", "")
+	r.OptionString("password", true, "password", "")
+
+	r.OptionMapString("count", false, "return count for each provided jql or filterID or Key", nil)
+	r.OptionStringSlice("issues", false, "return all issue for each jql or filterID or Key", nil)
+
+	r.OptionInt("max_result", false, "maximum issue to return (usable only with `issues` and `keys` fields)", 0)
+	// r.OptionInt("min_result", false, "do not generate event when jira returns less result than this number", 0)
+
+	r.OptionStringSlice("customfields", false, "search results returns standard fields. List here additional customfields to retreive", nil)
+	r.OptionString("event_by", false, "`issue` => produce one event for each found issue, or `result` for one event with all resulting issues", "issue")
 
 	r.Run(1)
 }
 
-func Configure(options xp.Options) error {
-	url = options.String("url")
-	username = options.String("username")
-	password = options.String("password")
-	jql = options.String("jql")
+func Configure() error {
+
+	if len(r.Opt.MapString("count")) == 0 && len(r.Opt.StringSlice("issues")) == 0 {
+		return fmt.Errorf("missing `count` or `issues` param")
+	}
+
 	return nil
 }
 
@@ -36,42 +45,119 @@ func Start() error {
 	return nil
 }
 
+const (
+	FILTER_ID = iota + 1
+	JQL
+	KEY
+)
+
+var reKey *regexp.Regexp
+var reFilterId *regexp.Regexp
+
+func jiraRequestKind(request string) int {
+	if reKey == nil {
+		reKey = regexp.MustCompile("^[a-zA-Z]+-[0-9]+$")
+		reFilterId = regexp.MustCompile("^[0-9]+$")
+	}
+	if reKey.MatchString(request) {
+		return KEY
+	}
+	if reFilterId.MatchString(request) {
+		return FILTER_ID
+	}
+	return JQL
+}
+
 func Receive(data interface{}) error {
-	num, err := getNumberOfIssues(jql, url, username, password)
+	message := mxj.Map(data.(map[string]interface{}))
+
+	// Connect to JIRA and acquire Auth.
+	r.Debugf("connecting")
+	j, err := newJiraClient(
+		r.Opt.String("url"),
+		r.Opt.String("username"),
+		r.Opt.String("password"),
+		r.Logf,
+	)
 	if err != nil {
-		r.Logf("%s\n", err.Error())
 		return err
 	}
 
-	return r.Send(map[string]interface{}{
-		"count": num,
-	})
-}
+	// Process count
+	countMap := map[string]int{}
+	for fname, requestString := range r.Opt.MapString("count") {
+		var count int
+		var err error
 
-func getNumberOfIssues(jql, jiraUrl, username, password string) (int, error) {
-	jiraClient, err := jira.NewClient(nil, jiraUrl)
-	if err != nil {
-		return 0, fmt.Errorf("JiraJob : error jira connect : %s", err)
+		switch jiraRequestKind(requestString) {
+		case KEY:
+			// CountIssuesByKey
+			r.Debugf("%s => CountIssuesByKey(`%s`)", fname, requestString)
+			count, err = j.CountIssuesByKey(requestString)
+		// case FILTER_ID:
+		// 	// CountIssuesByFilterID
+		// 	r.Debugf("%s => CountIssuesByFilterID(`%s`)", fname, requestString)
+		// 	count, err = j.CountIssuesByFilterID(requestString)
+		case JQL:
+			// CountIssuesByJQL
+			r.Debugf("%s => CountIssuesByJQL(`%s`)", fname, requestString)
+			count, err = j.CountIssuesByJQL(requestString)
+		}
+
+		if err != nil {
+			r.Logf("%s", err)
+			continue
+		}
+
+		countMap[fname] = count
+	}
+	if len(countMap) > 0 {
+		message.SetValueForPath(countMap, "counts")
 	}
 
-	if username != "" && jiraClient.Authentication.Authenticated() == false {
-		res, err := jiraClient.Authentication.AcquireSessionCookie(username, password)
-		if err != nil || res == false {
-			return 0, fmt.Errorf("Authentification error : %s", err)
+	// Process issues
+	issues := []map[string]interface{}{}
+	for _, requestString := range r.Opt.StringSlice("issues") {
+		var err error
+		var issuesChan chan map[string]interface{}
+
+		switch jiraRequestKind(requestString) {
+		case KEY:
+			// FindIssuesByKey
+			r.Debugf("FindIssuesByKey(`%s`,`%d`,`%s`)", requestString, r.Opt.Int("max_result"), r.Opt.StringSlice("customfields"))
+			issuesChan, err = j.FindOneIssueByKey(requestString, r.Opt.Int("max_result"), r.Opt.StringSlice("customfields"))
+		// case FILTER_ID:
+		// 	r.Debugf("FindIssuesByFilterID(`%s`,`%d`,`%s`)", requestString, r.Opt.Int("max_result"), r.Opt.StringSlice("customfields"))
+		// 	issuesChan, err = j.FindIssuesByFilterID(requestString, r.Opt.Int("max_result"), r.Opt.StringSlice("customfields"))
+		case JQL:
+			// FindIssuesByJQL
+			r.Debugf("FindIssuesByJQL(`%s`,`%d`,`%s`)", requestString, r.Opt.Int("max_result"), r.Opt.StringSlice("customfields"))
+			issuesChan, err = j.FindIssuesByJQL(requestString, r.Opt.Int("max_result"), r.Opt.StringSlice("customfields"))
+		}
+
+		if err != nil {
+			r.Logf(err.Error())
+			continue
+		}
+
+		for issue := range issuesChan {
+			if r.Opt.String("event_by") == "issue" {
+				r.Send(issue)
+			} else {
+				issues = append(issues, issue)
+			}
 		}
 	}
 
-	options := jira.SearchOptions{
-		StartAt:    0,
-		MaxResults: 1,
+	if r.Opt.String("event_by") != "issue" && len(issues) > 0 {
+		message.SetValueForPath(issues, "issues")
 	}
 
-	_, body, err := jiraClient.Issue.Search(jql, &options)
-	if err != nil {
-		return 0, fmt.Errorf("JiraJob : search error : %s, %s", err, jql)
+	if message.Exists("issues") || message.Exists("counts") {
+		return r.Send(message)
 	}
 
-	return body.Total, nil
+	return nil
 
 }
 

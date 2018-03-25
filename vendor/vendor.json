@@ -1,0 +1,25 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"checksumSHA1": "6QgEV/GaLKr87Lr9pDLJoOSpK2I=",
+			"path": "github.com/clbanning/mxj",
+			"revision": "f65883c94005a944be54d391bf15d52b4eb869c9",
+			"revisionTime": "2017-12-12T15:34:21Z"
+		},
+		{
+			"checksumSHA1": "40Ns85VYa4smQPcewZ7SOdfLnKU=",
+			"path": "github.com/fatih/structs",
+			"revision": "a720dfa8df582c51dee1b36feabb906bde1588bd",
+			"revisionTime": "2017-01-03T08:10:50Z"
+		},
+		{
+			"checksumSHA1": "KxTRwuB0yyGgf1oacv7ja+klIT8=",
+			"path": "gopkg.in/andygrunwald/go-jira.v1",
+			"revision": "f9c91e2a6be53464f27662c88c89938be4fbe1c6",
+			"revisionTime": "2018-03-05T19:57:24Z"
+		}
+	],
+	"rootPath": "github.com/vjeantet/bitfan-producer-jira"
+}
