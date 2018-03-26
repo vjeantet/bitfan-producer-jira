@@ -123,8 +123,8 @@ func Receive(data interface{}) error {
 
 		switch jiraRequestKind(requestString) {
 		case KEY:
-			// FindIssuesByKey
-			r.Debugf("FindIssuesByKey(`%s`,`%d`,`%s`)", requestString, r.Opt.Int("max_result"), r.Opt.StringSlice("customfields"))
+			// FindOneIssueByKey
+			r.Debugf("FindOneIssueByKey(`%s`,`%d`,`%s`)", requestString, r.Opt.Int("max_result"), r.Opt.StringSlice("customfields"))
 			issuesChan, err = j.FindOneIssueByKey(requestString, r.Opt.Int("max_result"), r.Opt.StringSlice("customfields"))
 		// case FILTER_ID:
 		// 	r.Debugf("FindIssuesByFilterID(`%s`,`%d`,`%s`)", requestString, r.Opt.Int("max_result"), r.Opt.StringSlice("customfields"))
