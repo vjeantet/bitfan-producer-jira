@@ -26,14 +26,13 @@ func main() {
 	r.OptionInt("max_result", false, "maximum issue to return (usable only with `issues` and `keys` fields)", 0)
 	// r.OptionInt("min_result", false, "do not generate event when jira returns less result than this number", 0)
 
-	r.OptionStringSlice("customfields", false, "search results returns standard fields. List here additional customfields to retreive", nil)
-	r.OptionString("event_by", false, "`issue` => produce one event for each found issue, or `result` for one event with all resulting issues", "issue")
+	r.OptionStringSlice("fields", false, "search results returns basic fields. List here additional fields to retreive", nil)
+	r.OptionString("event_by", false, "`issue` => produce one event for each found issue, or `result` for one event with all resulting issues", "result")
 
 	r.Run(1)
 }
 
 func Configure() error {
-
 	if len(r.Opt.MapString("count")) == 0 && len(r.Opt.StringSlice("issues")) == 0 {
 		return fmt.Errorf("missing `count` or `issues` param")
 	}
@@ -124,15 +123,15 @@ func Receive(data interface{}) error {
 		switch jiraRequestKind(requestString) {
 		case KEY:
 			// FindOneIssueByKey
-			r.Debugf("FindOneIssueByKey(`%s`,`%d`,`%s`)", requestString, r.Opt.Int("max_result"), r.Opt.StringSlice("customfields"))
-			issuesChan, err = j.FindOneIssueByKey(requestString, r.Opt.Int("max_result"), r.Opt.StringSlice("customfields"))
+			r.Debugf("FindOneIssueByKey(`%s`,`%d`,`%s`)", requestString, r.Opt.Int("max_result"), r.Opt.StringSlice("fields"))
+			issuesChan, err = j.FindOneIssueByKey(requestString, r.Opt.Int("max_result"), r.Opt.StringSlice("fields"))
 		// case FILTER_ID:
-		// 	r.Debugf("FindIssuesByFilterID(`%s`,`%d`,`%s`)", requestString, r.Opt.Int("max_result"), r.Opt.StringSlice("customfields"))
-		// 	issuesChan, err = j.FindIssuesByFilterID(requestString, r.Opt.Int("max_result"), r.Opt.StringSlice("customfields"))
+		// 	r.Debugf("FindIssuesByFilterID(`%s`,`%d`,`%s`)", requestString, r.Opt.Int("max_result"), r.Opt.StringSlice("fields"))
+		// 	issuesChan, err = j.FindIssuesByFilterID(requestString, r.Opt.Int("max_result"), r.Opt.StringSlice("fields"))
 		case JQL:
 			// FindIssuesByJQL
-			r.Debugf("FindIssuesByJQL(`%s`,`%d`,`%s`)", requestString, r.Opt.Int("max_result"), r.Opt.StringSlice("customfields"))
-			issuesChan, err = j.FindIssuesByJQL(requestString, r.Opt.Int("max_result"), r.Opt.StringSlice("customfields"))
+			r.Debugf("FindIssuesByJQL(`%s`,`%d`,`%s`)", requestString, r.Opt.Int("max_result"), r.Opt.StringSlice("fields"))
+			issuesChan, err = j.FindIssuesByJQL(requestString, r.Opt.Int("max_result"), r.Opt.StringSlice("fields"))
 		}
 
 		if err != nil {
